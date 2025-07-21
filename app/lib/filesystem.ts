@@ -1,21 +1,29 @@
 'use client';
 
-import { configure, fs } from '@zenfs/core';
-import { IndexedDB } from '@zenfs/dom';
-
 export class VirtualFileSystem {
   private initialized = false;
+  private zenfs: any = null;
 
   async init() {
     if (this.initialized) return;
     
+    // Only initialize in browser environment
+    if (typeof window === 'undefined') {
+      console.warn('VirtualFileSystem can only be used in browser environment');
+      return;
+    }
+    
     try {
-      await configure({
-        fs: "IndexedDB",
-        options: {
-          storeName: 'vibing-os-files'
-        }
-      });
+      // Use proper ZenFS imports as shown in their documentation
+      const { configureSingle } = await import('@zenfs/core');
+      const { IndexedDB } = await import('@zenfs/dom');
+      
+      // Configure with IndexedDB backend
+      await configureSingle({ backend: IndexedDB });
+      
+      // Import the promises API which should be more reliable
+      const zenfsPromises = await import('@zenfs/core/promises');
+      this.zenfs = zenfsPromises;
       this.initialized = true;
       console.log('Virtual filesystem initialized with IndexedDB');
     } catch (error) {
@@ -26,71 +34,37 @@ export class VirtualFileSystem {
 
   async writeFile(path: string, content: string): Promise<void> {
     await this.ensureInitialized();
-    return new Promise((resolve, reject) => {
-      fs.writeFile(path, content, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    return this.zenfs.writeFile(path, content);
   }
 
   async readFile(path: string): Promise<string> {
     await this.ensureInitialized();
-    return new Promise((resolve, reject) => {
-      fs.readFile(path, 'utf8', (err, data) => {
-        if (err) reject(err);
-        else resolve(data as string);
-      });
-    });
+    return this.zenfs.readFile(path, 'utf8');
   }
 
   async exists(path: string): Promise<boolean> {
     await this.ensureInitialized();
-    return new Promise((resolve) => {
-      fs.exists(path, (exists) => {
-        resolve(exists);
-      });
-    });
+    return this.zenfs.exists(path);
   }
 
   async mkdir(path: string): Promise<void> {
     await this.ensureInitialized();
-    return new Promise((resolve, reject) => {
-      fs.mkdir(path, { recursive: true }, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    return this.zenfs.mkdir(path, { recursive: true });
   }
 
   async readdir(path: string): Promise<string[]> {
     await this.ensureInitialized();
-    return new Promise((resolve, reject) => {
-      fs.readdir(path, (err, files) => {
-        if (err) reject(err);
-        else resolve(files as string[]);
-      });
-    });
+    return this.zenfs.readdir(path);
   }
 
   async stat(path: string): Promise<any> {
     await this.ensureInitialized();
-    return new Promise((resolve, reject) => {
-      fs.stat(path, (err, stats) => {
-        if (err) reject(err);
-        else resolve(stats);
-      });
-    });
+    return this.zenfs.stat(path);
   }
 
   async unlink(path: string): Promise<void> {
     await this.ensureInitialized();
-    return new Promise((resolve, reject) => {
-      fs.unlink(path, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    return this.zenfs.unlink(path);
   }
 
   private async ensureInitialized() {

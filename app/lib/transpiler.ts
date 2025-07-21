@@ -1,6 +1,6 @@
 'use client';
 
-import * as swc from '@swc/wasm';
+import init, { transform, parse } from '@swc/wasm-web';
 
 interface TranspilerOptions {
   filename?: string;
@@ -26,7 +26,9 @@ export class Transpiler {
     if (this.initialized) return;
     
     try {
-      await swc.default();
+      // Initialize SWC WASM in browser environment
+      await init();
+      
       this.initialized = true;
       console.log('SWC transpiler initialized');
       
@@ -38,13 +40,32 @@ export class Transpiler {
     }
   }
 
+  async parseCode(code: string, options: any): Promise<any> {
+    await this.ensureInitialized();
+    
+    try {
+      return await parse(code, options);
+    } catch (error) {
+      console.error('Parse error:', error);
+      throw error;
+    }
+  }
+
   async transpile(code: string, options: TranspilerOptions = {}): Promise<string> {
     await this.ensureInitialized();
     
     const { filename = 'file.tsx', jsx = true, esm = true } = options;
     
+    // Handle CSS files
+    if (filename.endsWith('.css')) {
+      return this.handleCssFile(code, filename);
+    }
+    
+    // Remove external library imports before transpilation
+    const cleanedCode = await this.removeExternalImports(code);
+    
     try {
-      const result = await swc.transform(code, {
+      const result = await transform(cleanedCode, {
         filename,
         jsc: {
           parser: {
@@ -54,8 +75,9 @@ export class Transpiler {
           },
           transform: {
             react: {
-              runtime: 'automatic',
-              importSource: 'https://esm.run/react',
+              runtime: 'classic',
+              pragma: 'React.createElement',
+              pragmaFrag: 'React.Fragment',
             },
           },
           target: 'es2022',
@@ -66,7 +88,7 @@ export class Transpiler {
         sourceMaps: false,
       });
       
-      // Auto-inject esm.run imports for common libraries
+      // Auto-inject esm.run imports for common libraries (excluding React)
       let transpiledCode = result.code;
       transpiledCode = await this.injectEsmRunImports(transpiledCode);
       
@@ -134,7 +156,7 @@ export class Transpiler {
     
     try {
       // Parse the code to AST using SWC
-      const ast = await swc.parse(code, {
+      const ast = await parse(code, {
         syntax: 'typescript',
         tsx: true,
       });
@@ -185,6 +207,15 @@ export class Transpiler {
       const sortedImports = importInfos.sort((a, b) => b.start - a.start);
       
       for (const importInfo of sortedImports) {
+        // Skip React and ReactDOM imports since we provide them globally
+        if (importInfo.mainPackage === 'react' || importInfo.mainPackage === 'react-dom') {
+          // Remove the entire import statement
+          const beforeImport = modifiedCode.substring(0, importInfo.start);
+          const afterImport = modifiedCode.substring(importInfo.end);
+          modifiedCode = beforeImport + afterImport;
+          continue;
+        }
+        
         const version = versionMap.get(importInfo.mainPackage) || 'latest';
         let esmRunUrl = `https://esm.run/${importInfo.mainPackage}@${version}`;
         
@@ -249,6 +280,72 @@ export class Transpiler {
       localStorage.setItem('vibing-os-package-cache', JSON.stringify(this.packageCache));
     } catch (error) {
       console.warn('Failed to save package cache:', error);
+    }
+  }
+
+  private handleCssFile(code: string, filename: string): string {
+    // Convert CSS to JavaScript module that injects styles
+    const escapedCss = code.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    
+    return `
+// CSS Module: ${filename}
+const css = \`${escapedCss}\`;
+
+// Create or update style element
+let styleElement = document.querySelector('style[data-css-file="${filename}"]');
+if (!styleElement) {
+  styleElement = document.createElement('style');
+  styleElement.setAttribute('data-css-file', '${filename}');
+  document.head.appendChild(styleElement);
+}
+styleElement.textContent = css;
+
+// Export for ES module compatibility
+export default css;
+export { css };
+`;
+  }
+
+  private async removeExternalImports(code: string): Promise<string> {
+    try {
+      console.log('🔧 Removing external library imports from code...');
+      console.log('Original code:', code.substring(0, 200) + '...');
+      
+      // Split code into lines for safer manipulation
+      const lines = code.split('\n');
+      const filteredLines: string[] = [];
+      let removedImports = 0;
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Skip lines that import external libraries (not relative imports starting with . or /)
+        if (trimmedLine.startsWith('import')) {
+          // Check if it's an external library import (not starting with . or /)
+          const fromMatch = trimmedLine.match(/from\s+['"]([^'"]+)['"]/);
+          const directImportMatch = trimmedLine.match(/import\s+['"]([^'"]+)['"]/);
+          
+          const importPath = fromMatch?.[1] || directImportMatch?.[1];
+          
+          if (importPath && !importPath.startsWith('.') && !importPath.startsWith('/')) {
+            // This is an external library import - remove it
+            console.log(`❌ Removing external library import: ${trimmedLine}`);
+            removedImports++;
+            continue;
+          }
+        }
+        
+        filteredLines.push(line);
+      }
+      
+      const result = filteredLines.join('\n');
+      console.log(`✅ Removed ${removedImports} external library imports`);
+      console.log('Code after external import removal:', result.substring(0, 200) + '...');
+      
+      return result;
+    } catch (error) {
+      console.warn('Failed to remove external library imports, using original code:', error);
+      return code;
     }
   }
 

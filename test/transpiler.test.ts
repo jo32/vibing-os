@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { Transpiler } from '../app/lib/transpiler';
 
-// Mock @swc/wasm
-vi.mock('@swc/wasm', () => ({
+// Mock @swc/wasm-web
+vi.mock('@swc/wasm-web', () => ({
   default: vi.fn().mockResolvedValue(undefined),
   transform: vi.fn(),
   parse: vi.fn(),
@@ -29,7 +29,7 @@ describe('Transpiler', () => {
     vi.clearAllMocks();
     
     // Default AST mock for tests that don't have imports
-    const swc = await import('@swc/wasm');
+    const swc = await import('@swc/wasm-web');
     (swc.parse as any).mockResolvedValue({
       type: 'Module',
       body: []
@@ -42,7 +42,7 @@ describe('Transpiler', () => {
 
   describe('initialization', () => {
     it('should initialize SWC successfully', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       await transpiler.init();
       
@@ -67,7 +67,7 @@ describe('Transpiler', () => {
     });
 
     it('should transpile TypeScript with JSX successfully', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'import React from "react"; const Component = () => React.createElement("div", null, "Hello");'
@@ -108,7 +108,10 @@ const Component = () => <div>Hello</div>;`;
         esm: true
       });
 
-      expect(swc.transform).toHaveBeenCalledWith(code, {
+      // The transpiler should remove external library imports before calling SWC
+      const expectedCode = `const Component = () => <div>Hello</div>;`;
+      
+      expect(swc.transform).toHaveBeenCalledWith(expectedCode, {
         filename: 'Component.tsx',
         jsc: {
           parser: {
@@ -118,8 +121,9 @@ const Component = () => <div>Hello</div>;`;
           },
           transform: {
             react: {
-              runtime: 'automatic',
-              importSource: 'https://esm.run/react',
+              runtime: 'classic',
+              pragma: 'React.createElement',
+              pragmaFrag: 'React.Fragment',
             },
           },
           target: 'es2022',
@@ -135,7 +139,7 @@ const Component = () => <div>Hello</div>;`;
     });
 
     it('should handle regular JavaScript files', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'console.log("hello");'
@@ -168,7 +172,7 @@ const Component = () => <div>Hello</div>;`;
     });
 
     it('should replace import statements with esm.run URLs', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'import React from "react"; import { useState } from "react"; import axios from "axios";'
@@ -220,7 +224,7 @@ import axios from 'axios';`;
     });
 
     it('should handle subpath imports', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'import { createRoot } from "react-dom/client";'
@@ -247,11 +251,12 @@ import axios from 'axios';`;
 
       // Check that the fetch was called for the main package
       expect(fetch).toHaveBeenCalledWith('https://registry.npmjs.org/react-dom/latest');
-      expect(result).toContain('react-dom'); // Basic validation
+      // The external import should be removed from the result
+      expect(result).not.toContain('react-dom/client');
     });
 
     it('should not modify relative imports', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'import Component from "./Component"; import utils from "../utils";'
@@ -272,7 +277,7 @@ import axios from 'axios';`;
     });
 
     it('should cache package versions for 24 hours', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'import React from "react";'
@@ -308,7 +313,7 @@ import axios from 'axios';`;
     });
 
     it('should fallback to cached version on API failure', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'import React from "react";'
@@ -335,7 +340,7 @@ import axios from 'axios';`;
     });
 
     it('should use fallback versions for unknown packages on API failure', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       
       (swc.transform as any).mockResolvedValue({
         code: 'import unknownPackage from "unknown-package";'
@@ -362,7 +367,7 @@ import axios from 'axios';`;
 
   describe('error handling', () => {
     it('should handle SWC initialization errors', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       const error = new Error('SWC initialization failed');
       (swc.default as any).mockRejectedValue(error);
 
@@ -370,7 +375,7 @@ import axios from 'axios';`;
     });
 
     it('should handle transpilation errors', async () => {
-      const swc = await import('@swc/wasm');
+      const swc = await import('@swc/wasm-web');
       const error = new Error('Syntax error');
       
       await transpiler.init();

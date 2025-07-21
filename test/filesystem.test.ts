@@ -3,16 +3,23 @@ import { VirtualFileSystem } from '../app/lib/filesystem';
 
 // Mock @zenfs/core
 vi.mock('@zenfs/core', () => ({
-  configure: vi.fn().mockResolvedValue(undefined),
-  fs: {
-    writeFile: vi.fn(),
-    readFile: vi.fn(),
-    exists: vi.fn(),
-    mkdir: vi.fn(),
-    readdir: vi.fn(),
-    stat: vi.fn(),
-    unlink: vi.fn(),
-  },
+  configureSingle: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Mock @zenfs/dom
+vi.mock('@zenfs/dom', () => ({
+  IndexedDB: vi.fn(),
+}));
+
+// Mock @zenfs/core/promises
+vi.mock('@zenfs/core/promises', () => ({
+  writeFile: vi.fn(),
+  readFile: vi.fn(),
+  exists: vi.fn(),
+  mkdir: vi.fn(),
+  readdir: vi.fn(),
+  stat: vi.fn(),
+  unlink: vi.fn(),
 }));
 
 describe('VirtualFileSystem', () => {
@@ -25,25 +32,21 @@ describe('VirtualFileSystem', () => {
 
   describe('initialization', () => {
     it('should initialize with IndexedDB backend', async () => {
-      const { configure } = await import('@zenfs/core');
+      const { configureSingle } = await import('@zenfs/core');
+      const { IndexedDB } = await import('@zenfs/dom');
       
       await vfs.init();
       
-      expect(configure).toHaveBeenCalledWith({
-        fs: "IndexedDB",
-        options: {
-          storeName: 'vibing-os-files'
-        }
-      });
+      expect(configureSingle).toHaveBeenCalledWith({ backend: IndexedDB });
     });
 
     it('should not reinitialize if already initialized', async () => {
-      const { configure } = await import('@zenfs/core');
+      const { configureSingle } = await import('@zenfs/core');
       
       await vfs.init();
       await vfs.init(); // Call again
       
-      expect(configure).toHaveBeenCalledTimes(1);
+      expect(configureSingle).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -53,80 +56,66 @@ describe('VirtualFileSystem', () => {
     });
 
     it('should write file successfully', async () => {
-      const { fs } = await import('@zenfs/core');
-      (fs.writeFile as any).mockImplementation((path: string, content: string, callback: Function) => {
-        callback(null);
-      });
+      const zenfsPromises = await import('@zenfs/core/promises');
+      (zenfsPromises.writeFile as any).mockResolvedValue(undefined);
 
       await expect(vfs.writeFile('/test.txt', 'hello world')).resolves.toBeUndefined();
-      expect(fs.writeFile).toHaveBeenCalledWith('/test.txt', 'hello world', expect.any(Function));
+      expect(zenfsPromises.writeFile).toHaveBeenCalledWith('/test.txt', 'hello world');
     });
 
     it('should read file successfully', async () => {
-      const { fs } = await import('@zenfs/core');
+      const zenfsPromises = await import('@zenfs/core/promises');
       const expectedContent = 'hello world';
-      (fs.readFile as any).mockImplementation((path: string, encoding: string, callback: Function) => {
-        callback(null, expectedContent);
-      });
+      (zenfsPromises.readFile as any).mockResolvedValue(expectedContent);
 
       const content = await vfs.readFile('/test.txt');
       expect(content).toBe(expectedContent);
-      expect(fs.readFile).toHaveBeenCalledWith('/test.txt', 'utf8', expect.any(Function));
+      expect(zenfsPromises.readFile).toHaveBeenCalledWith('/test.txt', 'utf8');
     });
 
     it('should check file existence', async () => {
-      const { fs } = await import('@zenfs/core');
-      (fs.exists as any).mockImplementation((path: string, callback: Function) => {
-        callback(true);
-      });
+      const zenfsPromises = await import('@zenfs/core/promises');
+      (zenfsPromises.exists as any).mockResolvedValue(true);
 
       const exists = await vfs.exists('/test.txt');
       expect(exists).toBe(true);
-      expect(fs.exists).toHaveBeenCalledWith('/test.txt', expect.any(Function));
+      expect(zenfsPromises.exists).toHaveBeenCalledWith('/test.txt');
     });
 
     it('should create directories recursively', async () => {
-      const { fs } = await import('@zenfs/core');
-      (fs.mkdir as any).mockImplementation((path: string, options: any, callback: Function) => {
-        callback(null);
-      });
+      const zenfsPromises = await import('@zenfs/core/promises');
+      (zenfsPromises.mkdir as any).mockResolvedValue(undefined);
 
       await expect(vfs.mkdir('/project/src')).resolves.toBeUndefined();
-      expect(fs.mkdir).toHaveBeenCalledWith('/project/src', { recursive: true }, expect.any(Function));
+      expect(zenfsPromises.mkdir).toHaveBeenCalledWith('/project/src', { recursive: true });
     });
 
     it('should list directory contents', async () => {
-      const { fs } = await import('@zenfs/core');
+      const zenfsPromises = await import('@zenfs/core/promises');
       const expectedFiles = ['file1.txt', 'file2.js'];
-      (fs.readdir as any).mockImplementation((path: string, callback: Function) => {
-        callback(null, expectedFiles);
-      });
+      (zenfsPromises.readdir as any).mockResolvedValue(expectedFiles);
 
       const files = await vfs.readdir('/project');
       expect(files).toEqual(expectedFiles);
-      expect(fs.readdir).toHaveBeenCalledWith('/project', expect.any(Function));
+      expect(zenfsPromises.readdir).toHaveBeenCalledWith('/project');
     });
 
     it('should get file stats', async () => {
-      const { fs } = await import('@zenfs/core');
+      const zenfsPromises = await import('@zenfs/core/promises');
       const expectedStats = { size: 100, isFile: () => true };
-      (fs.stat as any).mockImplementation((path: string, callback: Function) => {
-        callback(null, expectedStats);
-      });
+      (zenfsPromises.stat as any).mockResolvedValue(expectedStats);
 
       const stats = await vfs.stat('/test.txt');
       expect(stats).toEqual(expectedStats);
-      expect(fs.stat).toHaveBeenCalledWith('/test.txt', expect.any(Function));
+      expect(zenfsPromises.stat).toHaveBeenCalledWith('/test.txt');
     });
 
     it('should delete files', async () => {
-      const { fs } = await import('@zenfs/core');
-      (fs.unlink as any).mockImplementation((path: string, callback: Function) => {
-        callback(null);
-      });
+      const zenfsPromises = await import('@zenfs/core/promises');
+      (zenfsPromises.unlink as any).mockResolvedValue(undefined);
 
       await expect(vfs.unlink('/test.txt')).resolves.toBeUndefined();
-      expect(fs.unlink).toHaveBeenCalledWith('/test.txt', expect.any(Function));
+      expect(zenfsPromises.unlink).toHaveBeenCalledWith('/test.txt');
     });
   });
 
@@ -136,21 +125,17 @@ describe('VirtualFileSystem', () => {
     });
 
     it('should handle write errors', async () => {
-      const { fs } = await import('@zenfs/core');
+      const zenfsPromises = await import('@zenfs/core/promises');
       const error = new Error('Write failed');
-      (fs.writeFile as any).mockImplementation((path: string, content: string, callback: Function) => {
-        callback(error);
-      });
+      (zenfsPromises.writeFile as any).mockRejectedValue(error);
 
       await expect(vfs.writeFile('/test.txt', 'content')).rejects.toThrow('Write failed');
     });
 
     it('should handle read errors', async () => {
-      const { fs } = await import('@zenfs/core');
+      const zenfsPromises = await import('@zenfs/core/promises');
       const error = new Error('File not found');
-      (fs.readFile as any).mockImplementation((path: string, encoding: string, callback: Function) => {
-        callback(error);
-      });
+      (zenfsPromises.readFile as any).mockRejectedValue(error);
 
       await expect(vfs.readFile('/nonexistent.txt')).rejects.toThrow('File not found');
     });
