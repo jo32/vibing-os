@@ -203,6 +203,33 @@ async function bootstrapApplication() {
     // Mount the application
     const rootElement = window.__vibing_container || document.getElementById('root') || document.body;
     
+    // Ensure the app is constrained to its container when in preview mode
+    if (window.__vibing_container) {
+      // Add a unique class to the container for scoped styling
+      window.__vibing_container.classList.add('vibing-preview-container');
+      
+      // Inject scoped CSS that only affects the preview container
+      if (!document.querySelector('#vibing-container-styles')) {
+        const style = document.createElement('style');
+        style.id = 'vibing-container-styles';
+        style.textContent = \`
+          .vibing-preview-container .min-h-screen {
+            min-height: 100% !important;
+            height: auto !important;
+          }
+          .vibing-preview-container .h-screen {
+            height: 100% !important;
+          }
+          .vibing-preview-container {
+            height: 100% !important;
+            overflow: auto !important;
+            position: relative !important;
+          }
+        \`;
+        document.head.appendChild(style);
+      }
+    }
+    
     // Reuse existing root or create new one
     if (!window.__reactRoot) {
       window.__reactRoot = window.ReactDOM.createRoot(rootElement);
@@ -410,6 +437,10 @@ if (!document.querySelector('link[href*="tailwind"]') &&
       
       // Set up global container reference if provided
       if (container) {
+        // Clean up any existing container reference first
+        if ((window as any).__vibing_container) {
+          delete (window as any).__vibing_container;
+        }
         (window as any).__vibing_container = container;
       }
       
@@ -427,10 +458,8 @@ if (!document.querySelector('link[href*="tailwind"]') &&
       
       eval(buildResult.compiledCode);
       
-      // Clean up global reference
-      if ((window as any).__vibing_container) {
-        delete (window as any).__vibing_container;
-      }
+      // Don't clean up container reference immediately - let React finish mounting
+      // The container reference will be cleaned up on the next render
       
       console.log('✅ Application rendered successfully');
       

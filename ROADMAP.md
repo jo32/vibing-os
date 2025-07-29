@@ -7,7 +7,6 @@
 VibingOS aims to be a complete development environment that runs entirely in the browser, featuring:
 - Virtual file system with persistent storage
 - Real-time TypeScript/JSX transpilation
-- Live preview with iframe sandboxing
 - AI-powered coding assistance
 - Monaco Editor integration
 - Zero server dependencies
@@ -61,21 +60,13 @@ VibingOS aims to be a complete development environment that runs entirely in the
 - [ ] **Code Editor Component** (`app/components/editor/`)
   - [ ] Monaco Editor React integration
   - [ ] File system binding (open/save)
-  - [ ] TypeScript language server
-  - [ ] Syntax highlighting for JSX/TSX
-  - [ ] Auto-completion and IntelliSense
-  - [ ] Error highlighting and diagnostics
   - [ ] Multiple file tabs
-  - [ ] Vim keybindings (optional)
 
 #### Live Preview System
 - [ ] **Preview Engine** (`app/components/preview/`)
-  - [ ] BlobURL generation from transpiled code
-  - [ ] Secure iframe sandboxing
   - [ ] Hot reload on file changes
   - [ ] Error boundary display
   - [ ] Console output capture
-  - [ ] Mobile-responsive preview
 
 #### UI Layout System
 - [ ] **Resizable Panel Layout** (`app/components/layout/`)

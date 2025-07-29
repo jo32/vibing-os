@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { streamingCompiler } from '../lib/compiler';
+import { webpackCompiler } from '../lib/webpack-compiler';
 
 interface PreviewProps {
   entryPoint?: string;
@@ -27,17 +27,34 @@ export function Preview({
     setError(null);
     
     try {
-      // Clear previous render
+      // Clear previous render and reset React root
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
+        // Clear any existing React root
+        if ((window as any).__reactRoot) {
+          delete (window as any).__reactRoot;
+        }
       }
 
-      // Compile and execute the project directly
-      await streamingCompiler.compileAndExecute({
+      // Initialize compiler if needed
+      await webpackCompiler.init();
+
+      // Build the application
+      const buildResult = await webpackCompiler.build({
         entryPoint,
-        includeTailwind,
-        includeRuntime
-      }, containerRef.current || undefined);
+        includeTailwind
+      });
+
+      // Execute and render the application in the container
+      const container = containerRef.current;
+      if (!container) {
+        console.warn('Preview container not ready, retrying...');
+        // Retry after a short delay
+        setTimeout(() => compileAndPreview(), 100);
+        return;
+      }
+      
+      await webpackCompiler.executeAndRender(buildResult, container);
 
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -87,22 +104,24 @@ export function Preview({
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full bg-white">
       <div
         ref={containerRef}
-        className={className}
+        className="w-full h-full"
         style={{
           margin: 0,
-          padding: '16px',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+          padding: 0,
           width: '100%',
           height: '100%',
-          overflow: 'auto'
+          overflow: 'auto',
+          backgroundColor: 'white',
+          display: 'block',
+          position: 'relative'
         }}
       />
       <button
         onClick={compileAndPreview}
-        className="absolute top-2 right-2 px-3 py-1 bg-blue-600 text-white text-sm rounded shadow hover:bg-blue-700 opacity-75 hover:opacity-100"
+        className="absolute top-2 right-2 px-3 py-1 bg-blue-600 text-white text-sm rounded shadow hover:bg-blue-700 opacity-75 hover:opacity-100 z-10"
         title="Refresh Preview"
       >
         ↻
