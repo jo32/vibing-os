@@ -1,4 +1,5 @@
 /* Global CSS for VibingOS Test Application */
+@import 'tailwindcss';
 
 /* Custom styles that complement Tailwind CSS */
 .test-styles {

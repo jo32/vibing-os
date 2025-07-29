@@ -202,8 +202,12 @@ async function bootstrapApplication() {
     
     // Mount the application
     const rootElement = window.__vibing_container || document.getElementById('root') || document.body;
-    const root = window.ReactDOM.createRoot(rootElement);
-    root.render(window.React.createElement(App));
+    
+    // Reuse existing root or create new one
+    if (!window.__reactRoot) {
+      window.__reactRoot = window.ReactDOM.createRoot(rootElement);
+    }
+    window.__reactRoot.render(window.React.createElement(App));
     
     console.log('✅ Application mounted successfully');
     
@@ -212,7 +216,11 @@ async function bootstrapApplication() {
     
     // Show error in UI
     const rootElement = window.__vibing_container || document.getElementById('root') || document.body;
-    const root = window.ReactDOM.createRoot(rootElement);
+    
+    // Reuse existing root or create new one for error display
+    if (!window.__reactRoot) {
+      window.__reactRoot = window.ReactDOM.createRoot(rootElement);
+    }
     const ErrorComponent = () => window.React.createElement('div', {
       style: { 
         padding: '20px', 
@@ -222,7 +230,7 @@ async function bootstrapApplication() {
       }
     }, \`Application Error:\\n\\n\${error.message}\\n\\n\${error.stack || ''}\`);
     
-    root.render(window.React.createElement(ErrorComponent));
+    window.__reactRoot.render(window.React.createElement(ErrorComponent));
   }
 }
 
@@ -382,7 +390,7 @@ if (!document.querySelector('link[href*="tailwind"]') &&
   private generateModuleDefinitions(compiledModules: Map<string, any>): string {
     
     const definitions = [];
-    for (const [moduleId, compilationResult] of compiledModules.entries()) {
+    for (const [moduleId, compilationResult] of Array.from(compiledModules.entries())) {
       definitions.push(compilationResult.code);
     }
     
